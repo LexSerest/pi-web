@@ -24,10 +24,14 @@ function getMessages(): Record<string, Record<string, string>> {
   }));
 }
 
+function isLocale(value: string): value is Locale {
+  return Boolean(getLocalePlugin(value));
+}
+
 function readInitialLocale(): Locale {
   try {
     const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-    if (stored === "en" || stored === "zh-CN" || stored === "zh-TW") return stored;
+    if (stored && isLocale(stored)) return stored;
   } catch {
     // 隐私模式或存储不可用时继续使用浏览器语言。
   }
