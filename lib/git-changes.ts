@@ -156,8 +156,20 @@ async function countUntrackedLines(filePaths: readonly string[], signal?: AbortS
   return total;
 }
 
-/** `signal`: the request's; once it aborts the scan stops and this throws. */
-export async function getGitStatus(cwd: string, signal?: AbortSignal): Promise<GitStatusResponse> {
+export interface GitStatusOptions {
+  /** Keep a file only when this returns true; the line totals follow the kept files. */
+  include?: (filePath: string) => boolean;
+}
+
+/**
+ * `signal`: the request's; once it aborts the scan stops and this throws.
+ * `options.include`: keeps only the listed files, and the line totals follow.
+ */
+export async function getGitStatus(
+  cwd: string,
+  signal?: AbortSignal,
+  options: GitStatusOptions = {},
+): Promise<GitStatusResponse> {
   const repositoryRoot = await findRepositoryRoot(cwd);
   if (!repositoryRoot) {
     return {
@@ -188,8 +200,10 @@ export async function getGitStatus(cwd: string, signal?: AbortSignal): Promise<G
     const entry = entries[index];
     const relative = path.relative(realCwd, path.resolve(realRoot, entry.path));
     if (!isRelativeWithin(relative)) continue;
+    const filePath = path.join(cwd, relative);
+    if (options.include && !options.include(filePath)) continue;
     files.push({
-      filePath: path.join(cwd, relative),
+      filePath,
       ...classifyGitStatus(entry),
       indexStatus: entry.indexStatus,
       worktreeStatus: entry.worktreeStatus,

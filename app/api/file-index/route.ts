@@ -10,7 +10,7 @@ import {
   isWindowsAbsolutePath,
 } from "@/lib/file-access";
 import { buildEntriesFromFiles, filterFileEntries, type FileIndexEntry } from "@/lib/file-fuzzy";
-import { isHiddenOutsideGit } from "@/lib/file-tree-visibility";
+import { isDotfilePath, isDotfilesHiddenByOperator, isHiddenOutsideGit } from "@/lib/file-tree-visibility";
 
 const execFileAsync = promisify(execFile);
 
@@ -50,7 +50,7 @@ function getIndexCache(): Map<string, CacheEntry> {
   return globalThis.__piFileIndexCache;
 }
 
-async function listWithGit(cwd: string): Promise<FileListing | null> {
+async function listWithGit(cwd: string, hideDotfiles: boolean): Promise<FileListing | null> {
   try {
     const { stdout } = await execFileAsync(
       "git",
@@ -58,17 +58,18 @@ async function listWithGit(cwd: string): Promise<FileListing | null> {
       { timeout: 10_000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, LC_ALL: "C" } },
     );
     const all = stdout.split("\0").filter(Boolean);
-    if (all.length > GIT_HARD_CAP) {
-      return { files: all.slice(0, GIT_HARD_CAP), hardTruncated: true };
+    const files = hideDotfiles ? all.filter((file) => !isDotfilePath(file)) : all;
+    if (files.length > GIT_HARD_CAP) {
+      return { files: files.slice(0, GIT_HARD_CAP), hardTruncated: true };
     }
-    return { files: all, hardTruncated: false };
+    return { files, hardTruncated: false };
   } catch {
     // Not a git repo (or git unavailable) — caller falls back to readdir walk.
     return null;
   }
 }
 
-function listWithWalk(cwd: string): FileListing {
+function listWithWalk(cwd: string, hideDotfiles: boolean): FileListing {
   const files: string[] = [];
   // BFS so shallow files win when the cap truncates the listing.
   const queue: Array<{ abs: string; rel: string; depth: number }> = [{ abs: cwd, rel: "", depth: 0 }];
@@ -82,8 +83,9 @@ function listWithWalk(cwd: string): FileListing {
     }
     for (const d of dirents) {
       // The file tree's name list, only for this non-git fallback. Git repos
-      // rely on .gitignore instead (matches the TUI's fd behavior).
-      if (isHiddenOutsideGit(d.name)) continue;
+      // rely on .gitignore instead (matches the TUI's fd behavior). The
+      // operator's dotfile switch is hidden everywhere.
+      if (isHiddenOutsideGit(d.name) || (hideDotfiles && d.name.startsWith("."))) continue;
       const childRel = rel ? `${rel}/${d.name}` : d.name;
       if (d.isDirectory()) {
         if (depth + 1 <= MAX_WALK_DEPTH) {
@@ -135,9 +137,10 @@ export async function GET(req: NextRequest) {
 
     const cache = getIndexCache();
     const now = Date.now();
+    const hideDotfiles = isDotfilesHiddenByOperator();
     let cached = cache.get(cwd);
     if (!cached || cached.expiresAt <= now) {
-      const listing = (await listWithGit(cwd)) ?? listWithWalk(cwd);
+      const listing = (await listWithGit(cwd, hideDotfiles)) ?? listWithWalk(cwd, hideDotfiles);
       for (const [key, entry] of cache) {
         if (entry.expiresAt <= now) cache.delete(key);
       }

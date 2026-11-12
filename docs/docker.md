@@ -80,6 +80,7 @@ Other supported/consumed variables can be supplied through the `environment:` se
 - `PI_WEB_DISABLE_MCP`: disable MCP integration.
 - `PI_WEB_DISABLE_TERMINAL`: hide the workspace terminal and refuse new terminal sessions.
 - `PI_WEB_FILES_DIR`: directory the Files browser shows when no project or session is selected, and the folder picker's boundary (must exist; `~` is expanded).
+- `PI_WEB_HIDE_DOTFILES`: hide dot-named files and folders from the file tree, its search, `@` suggestions and the changed-files view.
 - `PI_WEB_PUSH_SUBJECT`: optional Web Push VAPID subject.
 - `GITHUB_TOKEN` or `GH_TOKEN`: optional GitHub API token used by skill update checks; `SKILLS_API_URL` overrides the skills service base URL.
 - `PI_WEB_PERF`, `PI_WEB_SSE_BACKLOG_LIMIT_BYTES`: performance diagnostics / SSE backpressure tuning.

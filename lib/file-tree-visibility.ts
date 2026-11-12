@@ -12,7 +12,8 @@ import { execFile } from "child_process";
 // This is visibility only. Hidden entries stay readable through /api/files,
 // which authorizes by allowed root and never consults this module. The
 // explorer's "show hidden" switch lists the Git-ignored and name-list entries
-// with their reason; `.git` and `.DS_Store` stay out either way.
+// with their reason; `.git` and `.DS_Store` stay out either way, and
+// PI_WEB_HIDE_DOTFILES hides every dot-named entry the same way.
 // ============================================================================
 
 /**
@@ -22,6 +23,20 @@ import { execFile } from "child_process";
  * - `always`: `.git` and `.DS_Store`, never listed.
  */
 export type FileTreeHiddenReason = "ignored" | "excluded" | "always";
+
+// The operator's listing switch: dot-named entries are treated like `.git`
+// and `.DS_Store`, never listed even with `hidden=1`. Reads by path stay.
+export const HIDE_DOTFILES_VARIABLE = "PI_WEB_HIDE_DOTFILES";
+
+export function isDotfilesHiddenByOperator(environment: NodeJS.ProcessEnv = process.env): boolean {
+  const value = environment[HIDE_DOTFILES_VARIABLE]?.trim().toLowerCase();
+  return value !== undefined && value !== "" && value !== "0" && value !== "false";
+}
+
+/** Whether a flat path (Git's or the walk's `/`-joined form) has a dot-named segment. */
+export function isDotfilePath(relativePath: string): boolean {
+  return relativePath.split("/").some((segment) => segment.startsWith("."));
+}
 
 const HIDDEN_NAMES = new Set([
   "node_modules", ".git", ".next", "dist", "build", "__pycache__",
@@ -155,15 +170,23 @@ export async function readGitIgnoredNames(
   return new Set(matched.filter((name) => !tracked.has(name)));
 }
 
+export interface FileTreeVisibilityOptions {
+  /** Defaults to PI_WEB_HIDE_DOTFILES. */
+  hideDotfiles?: boolean;
+}
+
 /** Build the test of why an entry of one listing of `directory` is hidden; null when it is shown. */
 export async function getFileTreeHiddenReasons(
   directory: string,
   names: readonly string[],
+  options: FileTreeVisibilityOptions = {},
 ): Promise<(name: string) => FileTreeHiddenReason | null> {
-  const candidates = names.filter((name) => !ALWAYS_HIDDEN_NAMES.has(name));
+  const hideDotfiles = options.hideDotfiles ?? isDotfilesHiddenByOperator();
+  const alwaysHidden = (name: string): boolean => ALWAYS_HIDDEN_NAMES.has(name) || (hideDotfiles && name.startsWith("."));
+  const candidates = names.filter((name) => !alwaysHidden(name));
   const ignored = candidates.length > 0 ? await readGitIgnoredNames(directory, candidates) : null;
   return (name) => {
-    if (ALWAYS_HIDDEN_NAMES.has(name)) return "always";
+    if (alwaysHidden(name)) return "always";
     if (!ignored) return isHiddenOutsideGit(name) ? "excluded" : null;
     return ignored.has(name) ? "ignored" : null;
   };
@@ -173,7 +196,8 @@ export async function getFileTreeHiddenReasons(
 export async function getFileTreeVisibility(
   directory: string,
   names: readonly string[],
+  options: FileTreeVisibilityOptions = {},
 ): Promise<(name: string) => boolean> {
-  const hiddenReason = await getFileTreeHiddenReasons(directory, names);
+  const hiddenReason = await getFileTreeHiddenReasons(directory, names, options);
   return (name) => hiddenReason(name) === null;
 }

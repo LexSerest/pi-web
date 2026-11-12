@@ -65,6 +65,7 @@ pi-web update [--check] # 更新全局 npm 安装
 | `PI_WEB_PASSWORD` | 启用浏览器密码登录；API 客户端可使用用户名为 `pi` 的 Basic Auth | 不启用认证 |
 | `PI_WEB_DISABLE_TERMINAL` | 隐藏工作区终端：侧边栏不提供终端标签页，`POST /api/terminal` 会被拒绝 | 终端可用 |
 | `PI_WEB_FILES_DIR` | 未选择项目或会话时文件浏览器显示的目录，文件夹选择器也只能在其中浏览；目录必须存在，支持 `~` | 未设置 |
+| `PI_WEB_HIDE_DOTFILES` | 在文件树、搜索、`@` 建议和更改列表中隐藏名称以点开头的文件和文件夹；直接路径仍可打开 | 未设置 |
 
 在启动服务前设置 `PI_WEB_APP_NAME`，例如 `PI_WEB_APP_NAME='工作 Pi' pi-web`。修改后重启服务即可提供新的 manifest，无需重新构建。已安装 PWA 的名称更新由浏览器管理，不保证立即生效；此设置不改变页面标题或图标。
 

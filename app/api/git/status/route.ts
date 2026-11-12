@@ -1,6 +1,8 @@
 import fs from "fs";
+import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed, isWindowsAbsolutePath } from "@/lib/file-access";
+import { isDotfilePath, isDotfilesHiddenByOperator } from "@/lib/file-tree-visibility";
 import { getGitStatus } from "@/lib/git-changes";
 
 export async function GET(request: NextRequest) {
@@ -29,7 +31,13 @@ export async function GET(request: NextRequest) {
     }
 
     // A closed request (a newer refresh replaced it) stops its scan.
-    return NextResponse.json(await getGitStatus(cwd, request.signal));
+    return NextResponse.json(await getGitStatus(
+      cwd,
+      request.signal,
+      isDotfilesHiddenByOperator()
+        ? { include: (filePath) => !isDotfilePath(path.relative(cwd, filePath).split(path.sep).join("/")) }
+        : undefined,
+    ));
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
