@@ -572,6 +572,9 @@ export function AppShell() {
   const fileWorkspaceGenerationRef = useRef(0);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
   const [terminalsRestored, setTerminalsRestored] = useState(false);
+  // PI_WEB_DISABLE_TERMINAL hides every terminal entry point. Start enabled so
+  // a failed check never removes a working feature; POST refuses anyway.
+  const [terminalEnabled, setTerminalEnabled] = useState(true);
   // Subagent tabs remain open within a project; side tabs follow their main session.
   const [agentTabs, setAgentTabs] = useState<{ sessionId: string; label: string; side?: boolean }[]>([]);
   const sideTabOwnerRef = useRef<string | null>(null);
@@ -608,19 +611,41 @@ export function AppShell() {
   }, [panelTabIds]);
 
   useEffect(() => {
-    try {
-      const saved = restoreTerminalTabs(window.sessionStorage.getItem(TERMINAL_TABS_KEY));
-      setTerminalTabs(saved.tabs);
-      if (saved.activeId) {
-        setActiveFileTabId(saved.activeId);
-        setRightPanelOpen(saved.open);
+    let cancelled = false;
+    const apply = (enabled: boolean) => {
+      if (cancelled) return;
+      setTerminalEnabled(enabled);
+      if (!enabled) {
+        // Saved tabs belong to a terminal the server will not create again.
+        try { window.sessionStorage.removeItem(TERMINAL_TABS_KEY); } catch { /* storage is optional */ }
+      } else {
+        try {
+          const saved = restoreTerminalTabs(window.sessionStorage.getItem(TERMINAL_TABS_KEY));
+          setTerminalTabs(saved.tabs);
+          if (saved.activeId) {
+            setActiveFileTabId(saved.activeId);
+            setRightPanelOpen(saved.open);
+          }
+        } catch { /* storage is optional */ }
       }
-    } catch { /* storage is optional */ }
-    setTerminalsRestored(true);
+      setTerminalsRestored(true);
+    };
+    void (async () => {
+      try {
+        const response = await fetch("/api/terminal", { cache: "no-store" });
+        if (!cancelled && response.ok) {
+          const data = await response.json() as { enabled?: unknown };
+          apply(data?.enabled !== false);
+          return;
+        }
+      } catch { /* the check is optional; POST still refuses a disabled terminal */ }
+      apply(true);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    if (!terminalsRestored) return;
+    if (!terminalsRestored || !terminalEnabled) return;
     try {
       window.sessionStorage.setItem(TERMINAL_TABS_KEY, JSON.stringify({
         tabs: terminalTabs.map(({ id, cwd }) => ({ id, cwd })),
@@ -628,7 +653,7 @@ export function AppShell() {
         open: rightPanelOpen,
       }));
     } catch { /* storage is optional */ }
-  }, [terminalTabs, activeFileTabId, rightPanelOpen, terminalsRestored]);
+  }, [terminalEnabled, terminalTabs, activeFileTabId, rightPanelOpen, terminalsRestored]);
 
   const rememberSideTabs = useCallback((key: string) => {
     try {
@@ -1622,7 +1647,8 @@ export function AppShell() {
         selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
         onCwdChange={handleCwdChange}
         onOpenFile={handleOpenFile}
-        onOpenTerminal={handleOpenTerminal}
+        onOpenTerminal={terminalEnabled ? handleOpenTerminal : undefined}
+        terminalEnabled={terminalEnabled}
         explorerRefreshKey={explorerRefreshKey}
         onExplorerRefresh={handleExplorerRefresh}
         onAtMention={handleAtMention}

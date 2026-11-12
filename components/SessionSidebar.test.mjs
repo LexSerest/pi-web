@@ -257,6 +257,13 @@ test("below the sessions the section's header row holds the files' keys in the f
     "Upload files to project root",
   ]);
 
+  // The operator's switch removes the key from the files section too, rather
+  // than leaving the disabled key that a missing handler shows.
+  assert.doesNotMatch(
+    sectionKeys(render({ selectedCwd: "/work/alpha", onOpenTerminal: noop, terminalEnabled: false })),
+    /Open workspace terminal/,
+  );
+
   // The keys share their group's width alike, 18 to 26px each. The group
   // never shrinks under its seven keys' minimum nor grows past their
   // maximum, and its grow factor, far above the toggle's (1), gives it the

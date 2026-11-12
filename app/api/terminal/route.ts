@@ -2,12 +2,28 @@ import { stat } from "fs/promises";
 import { resolve } from "path";
 import { NextResponse } from "next/server";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
+import { isTerminalDisabledByOperator, TERMINAL_DISABLE_VARIABLE } from "@/lib/terminal-availability";
 import { createTerminal } from "@/lib/terminal-manager";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+// GET /api/terminal - the browser's read of the operator switch, before it
+// offers a terminal tab. POST is the authority and refuses on its own.
+export async function GET() {
+  return NextResponse.json(
+    { enabled: !isTerminalDisabledByOperator() },
+    { headers: { "Cache-Control": "no-store" } },
+  );
+}
+
 export async function POST(req: Request) {
+  if (isTerminalDisabledByOperator()) {
+    return NextResponse.json(
+      { error: `Terminal is disabled: ${TERMINAL_DISABLE_VARIABLE} is set` },
+      { status: 403 },
+    );
+  }
   try {
     const body = await req.json() as { id?: unknown; cwd?: unknown; cols?: unknown; rows?: unknown };
     if (body.id !== undefined && (typeof body.id !== "string" || !/^[a-f0-9]{32}$/.test(body.id))) {

@@ -102,6 +102,12 @@ test("the files tab's keys: the folder's four, then the tree's two views, always
     "0 changed files (disabled) pressed=false",
   ]);
 
+  // The operator's switch removes it even with a handler.
+  assert.doesNotMatch(
+    actionsRow(render({ selectedCwd: "/work/alpha", onOpenTerminal: noop, terminalEnabled: false })),
+    /Open workspace terminal/,
+  );
+
   // Without a folder there is nothing to act on: no row.
   assert.doesNotMatch(render(), /sidebar-files-actions/);
 });
