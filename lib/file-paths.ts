@@ -45,3 +45,19 @@ export function getRelativeFilePath(filePath: string, cwd?: string): string {
 export function joinFilePath(parent: string, child: string): string {
   return `${normalizeFilePathSlashes(parent).replace(/\/$/, "")}/${child}`;
 }
+
+/**
+ * Whether `filePath` is `root` or below it, for the browser's folder picker.
+ * Slashes are normalized, and Windows-style paths (drive or UNC) compare
+ * case-insensitively; POSIX paths keep their case. Lexical only: a symlink is
+ * checked by the server's `realpath` answer.
+ */
+export function isFilePathWithin(filePath: string, root: string): boolean {
+  const comparable = (value: string): string => {
+    const slashed = normalizeFilePathSlashes(value).replace(/\/+$/, "");
+    return /^[a-zA-Z]:\//.test(slashed) || slashed.startsWith("//") ? slashed.toLowerCase() : slashed;
+  };
+  const target = comparable(filePath);
+  const base = comparable(root);
+  return target === base || target.startsWith(`${base}/`);
+}

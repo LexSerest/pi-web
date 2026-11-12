@@ -1,4 +1,5 @@
 import { getAdditionalAllowedRoots, normalizeSlashes } from "./allowed-roots";
+import { existingFilesDir } from "./default-files-dir";
 import { isExistingPathWithinRoots, isPathWithinRoots } from "./path-security";
 import { listAllSessions } from "./session-reader";
 export { allowFileRoot, normalizeSlashes } from "./allowed-roots";
@@ -29,6 +30,11 @@ export async function getAllowedFileRoots(): Promise<Set<string>> {
   }
 
   for (const root of getAdditionalAllowedRoots()) roots.add(root);
+
+  // PI_WEB_FILES_DIR is browsable before any session exists, so the files
+  // browser's fallback folder can be listed (and uploaded to, watched, ...).
+  const filesDir = await existingFilesDir();
+  if (filesDir) roots.add(normalizeSlashes(filesDir));
 
   globalThis.__piAllowedRootsCache = { roots, expiresAt: now + ALLOWED_ROOTS_TTL_MS };
   return roots;

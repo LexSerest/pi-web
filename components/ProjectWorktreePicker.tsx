@@ -80,7 +80,8 @@ interface Props {
   handleRef?: Ref<ProjectWorktreePickerHandle>;
   /** A project or checkout other than the one in use was picked, or a checkout was just created. */
   onPick: (target: NewSessionTarget, from: ProjectWorktreeControl) => void;
-  onUseDefaultDirectory: () => void;
+  /** Given, the menu offers "Use default directory"; with PI_WEB_FILES_DIR set the owner leaves it out. */
+  onUseDefaultDirectory?: () => void;
   /** "Open another project…": the folder picker. Focus goes back to `opener` when nothing moves. */
   onOpenFolder: (opener: HTMLElement | null) => void;
   onRefreshWorktrees: () => void;
@@ -375,18 +376,19 @@ export function ProjectWorktreePicker({
         },
       };
     });
-    // No project yet (a first run): the two folder items alone, no line above them.
+    // No project yet (a first run): the folder items alone, no line above them.
     const separator: SidebarMenuItem[] = choices.length > 0 ? [{ type: "separator", id: "separator" }] : [];
+    const pickDefaultDirectory = onUseDefaultDirectory;
     return [
       ...choices,
       ...separator,
-      {
-        type: "item",
+      ...(pickDefaultDirectory ? [{
+        type: "item" as const,
         id: "default-directory",
         label: t("sidebar.useDefaultDirectory"),
         icon: <FolderIcon size={13} />,
-        onSelect: () => onUseDefaultDirectory(),
-      },
+        onSelect: () => pickDefaultDirectory(),
+      }] : []),
       {
         type: "item",
         id: "open-folder",

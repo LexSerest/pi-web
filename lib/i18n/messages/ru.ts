@@ -523,6 +523,7 @@ export const ruLocale: LocalePlugin = {
     "directoryPicker.go": "Перейти",
     "directoryPicker.loadingDirectories": "Загрузка каталогов…",
     "directoryPicker.noSubdirectories": "Нет подкаталогов",
+    "directoryPicker.outsideRoot": "Можно просматривать только папки внутри {root}",
     "directoryPicker.selectTypedPath": "Выбрать {path}",
     "directoryPicker.selectCurrentDirectory": "Выбрать текущий каталог",
     "directoryPicker.selectThisFolder": "Выбрать эту папку",

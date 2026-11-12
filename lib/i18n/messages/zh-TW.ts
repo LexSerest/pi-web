@@ -523,6 +523,7 @@ export const zhTWLocale: LocalePlugin = {
     "directoryPicker.go": "前往",
     "directoryPicker.loadingDirectories": "正在載入目錄…",
     "directoryPicker.noSubdirectories": "沒有子目錄",
+    "directoryPicker.outsideRoot": "只能瀏覽 {root} 內的資料夾",
     "directoryPicker.selectTypedPath": "選擇 {path}",
     "directoryPicker.selectCurrentDirectory": "選擇目前目錄",
     "directoryPicker.selectThisFolder": "選擇此資料夾",

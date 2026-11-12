@@ -3,6 +3,7 @@
 import { type CSSProperties, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
+import { isFilePathWithin } from "@/lib/file-paths";
 
 interface DirectoryEntry {
   name: string;
@@ -111,16 +112,20 @@ interface Props {
   onCancel: () => void;
   onSelect: (path: string) => void;
   initialPath?: string;
+  /** When set, the picker starts here and never browses outside it. */
+  root?: string | null;
   busy?: boolean;
   error?: string | null;
 }
 
-export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false, error }: Props) {
+export function DirectoryPicker({ onCancel, onSelect, initialPath, root = null, busy = false, error }: Props) {
   const { t } = useI18n();
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [currentPath, setCurrentPath] = useState("");
   const [parentDirectory, setParentDirectory] = useState<string | null>(null);
-  const [pathInput, setPathInput] = useState(initialPath ?? "");
+  const [pathInput, setPathInput] = useState(() => (
+    root && initialPath && !isFilePathWithin(initialPath, root) ? root : initialPath ?? ""
+  ));
   const [directories, setDirectories] = useState<DirectoryEntry[]>([]);
   const [drives, setDrives] = useState<DirectoryEntry[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -135,12 +140,21 @@ export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false,
   const mountedRef = useRef(false);
 
   // Resolves to the listed folder's path, or null when it could not be listed.
+  const rootError = root ? t("directoryPicker.outsideRoot", { root }) : "";
   const navigateTo = useCallback(async (directory?: string): Promise<string | null> => {
     setLoading(true);
     setLoadError(null);
+    const requested = root ? (directory ?? root) : directory;
     try {
-      const data = await loadDirectories(directory);
-      const nextPath = data.path ?? directory ?? "/";
+      // Checked after the server's realpath, so `~`, relative input and a
+      // link inside the root that leads out all resolve before the list is
+      // shown; a refused folder leaves the previous listing in place.
+      const data = await loadDirectories(requested);
+      const nextPath = data.path ?? requested ?? "/";
+      if (root && !isFilePathWithin(nextPath, root)) {
+        setLoadError(rootError);
+        return null;
+      }
       setCurrentPath(nextPath);
       setParentDirectory(data.parentPath ?? null);
       setPathInput(nextPath);
@@ -153,12 +167,13 @@ export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false,
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [root, rootError]);
 
   useEffect(() => {
     setPortalTarget(document.body);
-    void navigateTo(initialPath || undefined);
-  }, [initialPath, navigateTo]);
+    const start = initialPath && (!root || isFilePathWithin(initialPath, root)) ? initialPath : undefined;
+    void navigateTo(start);
+  }, [initialPath, root, navigateTo]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -214,7 +229,8 @@ export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false,
   const hasUncommittedPath = typedPath !== currentPath;
   const canSelect = Boolean(typedPath) && !busy && !loading;
   const canCreate = Boolean(currentPath) && !hasUncommittedPath && !busy && !loading;
-  const canNavigateUp = Boolean(parentDirectory) || isWindowsDriveRoot(currentPath);
+  const parentWithinRoot = parentDirectory && (!root || isFilePathWithin(parentDirectory, root)) ? parentDirectory : null;
+  const canNavigateUp = root ? Boolean(parentWithinRoot) : Boolean(parentDirectory) || isWindowsDriveRoot(currentPath);
 
   const handleSelect = async () => {
     const path = hasUncommittedPath ? await navigateTo(typedPath) : currentPath;
@@ -269,7 +285,7 @@ export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false,
         </div>
 
         <form onSubmit={handlePathSubmit} style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, padding: "10px 14px", borderBottom: "1px solid var(--border)" }}>
-          <button className="directory-picker-back" type="button" onClick={() => void navigateTo(parentDirectory ?? undefined)} disabled={loading || !canNavigateUp} title={t("directoryPicker.goToParent")} aria-label={t("directoryPicker.goToParent")} style={{ width: 36, height: 36, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-hover)", color: "var(--text-muted)", cursor: canNavigateUp ? "pointer" : "default", opacity: canNavigateUp ? 1 : 0.45 }}>
+          <button className="directory-picker-back" type="button" onClick={() => void navigateTo(parentWithinRoot ?? undefined)} disabled={loading || !canNavigateUp} title={t("directoryPicker.goToParent")} aria-label={t("directoryPicker.goToParent")} style={{ width: 36, height: 36, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-hover)", color: "var(--text-muted)", cursor: canNavigateUp ? "pointer" : "default", opacity: canNavigateUp ? 1 : 0.45 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="m18 15-6-6-6 6" />
             </svg>

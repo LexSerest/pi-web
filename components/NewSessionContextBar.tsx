@@ -27,20 +27,24 @@ interface Props {
 }
 
 // The home folder the paths (the menus', a detached checkout's in the
-// worktree button) show as ~, asked for once per page: the bar mounts again
-// with every move of the fresh composer.
-let homeDirCheck: Promise<string> | null = null;
+// worktree button) show as ~, and PI_WEB_FILES_DIR when the operator set one,
+// asked for once per page: the bar mounts again with every move of the fresh
+// composer. A set PI_WEB_FILES_DIR also hides "Use default directory", whose
+// dated folder would sit outside the folder the picker is confined to.
+let homeDirCheck: Promise<void> | null = null;
 let homeDirFound = "";
-function loadHomeDir(): Promise<string> {
+let defaultFilesDirFound: string | null = null;
+let homeLoaded = false;
+function loadHomeDir(): Promise<void> {
   homeDirCheck ??= fetch("/api/home")
     .then((response) => response.json())
-    .then((data: { home?: string }) => {
+    .then((data: { home?: string; defaultFilesDir?: string | null }) => {
       homeDirFound = data.home ?? "";
-      return homeDirFound;
+      defaultFilesDirFound = data.defaultFilesDir ?? null;
+      homeLoaded = true;
     })
     .catch(() => {
       homeDirCheck = null;
-      return "";
     });
   return homeDirCheck;
 }
@@ -68,16 +72,19 @@ export function NewSessionContextBar({
 }: Props) {
   const { t } = useI18n();
   const [homeDir, setHomeDir] = useState(() => homeDirFound);
+  const [defaultFilesDir, setDefaultFilesDir] = useState<string | null>(() => defaultFilesDirFound);
   const pickerRef = useRef<ProjectWorktreePickerHandle>(null);
   const initialFocusRef = useRef(initialFocus);
   const onInitialFocusDoneRef = useRef(onInitialFocusDone);
   onInitialFocusDoneRef.current = onInitialFocusDone;
 
   useEffect(() => {
-    if (homeDirFound) return;
+    if (homeLoaded) return;
     let cancelled = false;
-    void loadHomeDir().then((home) => {
-      if (!cancelled && home) setHomeDir(home);
+    void loadHomeDir().then(() => {
+      if (cancelled) return;
+      if (homeDirFound) setHomeDir(homeDirFound);
+      setDefaultFilesDir(defaultFilesDirFound);
     });
     return () => {
       cancelled = true;
@@ -106,7 +113,7 @@ export function NewSessionContextBar({
         homeDir={homeDir}
         newWorktreeTitle={t("sidebar.newWorktreeForSession")}
         onPick={onPick}
-        onUseDefaultDirectory={onUseDefaultDirectory}
+        onUseDefaultDirectory={defaultFilesDir ? undefined : onUseDefaultDirectory}
         onOpenFolder={onOpenFolder}
         onRefreshWorktrees={onRefreshWorktrees}
         onCreateWorktree={onCreateWorktree}

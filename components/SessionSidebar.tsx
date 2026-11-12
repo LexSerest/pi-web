@@ -529,6 +529,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [error, setError] = useState<string | null>(null);
   const [selectedCwd, setSelectedCwd] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string>("");
+  const [defaultFilesDir, setDefaultFilesDir] = useState<string | null>(null);
   // Open for the files tab's project list, or for the composer's bar ("new-session").
   const [customPathOpen, setCustomPathOpen] = useState<false | "files" | "new-session">(false);
   const [customPathValue, setCustomPathValue] = useState(loadLastCustomCwd);
@@ -1188,8 +1189,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   }, [explorerRefreshKey]);
 
   useEffect(() => {
-    fetch("/api/home").then((r) => r.json()).then((d: { home?: string }) => {
+    fetch("/api/home").then((r) => r.json()).then((d: { home?: string; defaultFilesDir?: string | null }) => {
       if (d.home) setHomeDir(d.home);
+      setDefaultFilesDir(d.defaultFilesDir ?? null);
     }).catch(() => {});
   }, []);
 
@@ -2874,7 +2876,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     onMoveGroup: moveProject,
   } as const;
 
-  const explorerCwd = selectedCwd ?? selectedCwdProp ?? null;
+  // PI_WEB_FILES_DIR is a fallback, not a project: it shows only after the
+  // first session-list load, when there is no cwd to show. Using it earlier
+  // would flash it on every start before the recent project arrives, and with
+  // sessions the project or session cwd always wins.
+  const explorerCwd = selectedCwd ?? selectedCwdProp
+    ?? (!loading && allSessions.length === 0 ? defaultFilesDir : null);
   const changedFilesTitle = explorerCwd && changesCount > 0 ? t("sidebar.changedFiles", { count: changesCount }) : undefined;
   // The changes view's key turns disabled once nothing is changed (a
   // commit, a revert), under a keyboard user too. The browser blurs it to
@@ -3015,6 +3022,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       {customPathOpen && (
         <DirectoryPicker
           initialPath={customPathValue}
+          root={defaultFilesDir}
           busy={customPathValidating}
           error={customPathError}
           onCancel={() => {
@@ -3319,7 +3327,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               worktreeHint={inactiveWorktreeSelector}
               newWorktreeTitle={t("sidebar.createWorktreeTitle")}
               onPick={handleFilesPick}
-              onUseDefaultDirectory={() => { void handleDefaultCwd(); }}
+              onUseDefaultDirectory={defaultFilesDir ? undefined : () => { void handleDefaultCwd(); }}
               onOpenFolder={handleCustomPathClick}
               onRefreshWorktrees={refreshWorktrees}
               onCreateWorktree={createWorktree}

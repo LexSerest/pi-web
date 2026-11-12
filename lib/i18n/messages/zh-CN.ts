@@ -523,6 +523,7 @@ export const zhCNLocale: LocalePlugin = {
     "directoryPicker.go": "转到",
     "directoryPicker.loadingDirectories": "正在加载目录…",
     "directoryPicker.noSubdirectories": "没有子目录",
+    "directoryPicker.outsideRoot": "只能浏览 {root} 内的文件夹",
     "directoryPicker.selectTypedPath": "选择 {path}",
     "directoryPicker.selectCurrentDirectory": "选择当前目录",
     "directoryPicker.selectThisFolder": "选择此文件夹",
