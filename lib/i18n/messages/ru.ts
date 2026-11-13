@@ -555,7 +555,7 @@ export const ruLocale: LocalePlugin = {
     "sidebar.worktreeBranchMissing": "Ветка «{branch}» всё ещё принадлежит worktree, папка которого исчезла ({path}). Выполните git worktree prune, чтобы очистить.",
     "sidebar.create": "Создать",
     "sidebar.uploadFilesTitle": "Загрузить файлы в корень проекта",
-    "sidebar.uploadFiles": "Загрузить файлы",
+    "sidebar.uploadFiles": "Загрузить файл",
     "sidebar.refreshExplorer": "Обновить список файлов",
     "sidebar.showIgnoredFiles": "Показывать игнорируемые файлы",
     "sidebar.openInExplorer": "Открыть в Проводнике",

@@ -555,7 +555,7 @@ export const enLocale: LocalePlugin = {
     "sidebar.worktreeBranchMissing": "Branch “{branch}” still belongs to a worktree whose folder is gone ({path}). Run git worktree prune to clear it.",
     "sidebar.create": "Create",
     "sidebar.uploadFilesTitle": "Upload files to project root",
-    "sidebar.uploadFiles": "Upload files",
+    "sidebar.uploadFiles": "Upload file",
     "sidebar.refreshExplorer": "Refresh file list",
     "sidebar.showIgnoredFiles": "Show ignored files",
     "sidebar.openInExplorer": "Open in Explorer",

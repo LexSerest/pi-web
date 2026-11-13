@@ -81,7 +81,7 @@ Other supported/consumed variables can be supplied through the `environment:` se
 - `PI_WEB_DISABLE_TERMINAL`: hide the workspace terminal for everyone, admin mode included, and refuse new terminal sessions.
 - `PI_WEB_FILES_DIR`: directory a regular browser is fixed to, and the default project of a fresh page; admin mode may switch anywhere (must exist; `~` is expanded).
 - `PI_WEB_HIDE_DOTFILES`: hide dot-named files and folders from the file tree, its search, `@` suggestions and the changed-files view.
-- `PI_WEB_UPLOADS_DIR`: folder chat drops and attach-button files are uploaded to instead of the working directory (created if missing; `~` is expanded). Mount it as a volume to keep uploads across container restarts.
+- `PI_WEB_UPLOADS_DIR`: folder untargeted uploads use instead of the working directory — chat drops, attach-button files and the file browser's Upload button; dropping onto a folder row keeps that folder (created if missing; `~` is expanded). Mount it as a volume to keep uploads across container restarts.
 - `PI_WEB_PUSH_SUBJECT`: optional Web Push VAPID subject.
 - `GITHUB_TOKEN` or `GH_TOKEN`: optional GitHub API token used by skill update checks; `SKILLS_API_URL` overrides the skills service base URL.
 - `PI_WEB_PERF`, `PI_WEB_SSE_BACKLOG_LIMIT_BYTES`: performance diagnostics / SSE backpressure tuning.

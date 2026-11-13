@@ -2,9 +2,9 @@ import { mkdir, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
-// Where files dropped onto the chat (or picked with its attach button) are
-// written when the operator wants them out of the project folder. The file
-// browser's own Upload button keeps writing to the folder it shows.
+// Where untargeted uploads are written when the operator wants them out of the
+// project folder: chat drops, the composer's attach button and the file
+// browser's Upload button. Dropping files onto a folder row keeps that target.
 export const UPLOADS_DIR_VARIABLE = "PI_WEB_UPLOADS_DIR";
 
 /**

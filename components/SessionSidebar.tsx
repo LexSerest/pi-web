@@ -537,6 +537,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [selectedCwd, setSelectedCwd] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string>("");
   const [defaultFilesDir, setDefaultFilesDir] = useState<string | null>(null);
+  // PI_WEB_UPLOADS_DIR takes the Upload button's files; the title stops
+  // promising the project root when the operator pointed somewhere else.
+  const [uploadsDir, setUploadsDir] = useState<string | null>(null);
   // The default folder decides the first cwd; the session list must not pick a
   // recent project before /api/home answers, or the configured folder never
   // becomes the default.
@@ -1230,10 +1233,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/home").then((r) => r.json()).then((d: { home?: string; defaultFilesDir?: string | null }) => {
+    fetch("/api/home").then((r) => r.json()).then((d: { home?: string; defaultFilesDir?: string | null; uploadsDir?: string | null }) => {
       if (cancelled) return;
       if (d.home) setHomeDir(d.home);
       setDefaultFilesDir(d.defaultFilesDir ?? null);
+      setUploadsDir(d.uploadsDir ?? null);
     }).catch(() => {}).finally(() => {
       if (!cancelled) setHomeLoaded(true);
     });
@@ -3012,7 +3016,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         fileExplorerRef.current?.openUploadPicker();
       }}
       disabled={!explorerCwd || explorerUploadBusy}
-      title={t("sidebar.uploadFilesTitle")}
+      title={uploadsDir ? t("sidebar.uploadFiles") : t("sidebar.uploadFilesTitle")}
     >
       <UploadIcon size={keyIconSize} />
     </ToolbarIconButton>

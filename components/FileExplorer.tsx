@@ -13,7 +13,7 @@ import {
 } from "@/lib/file-paths";
 import type { GitFileStatus, GitFileStatusKind, GitStatusResponse } from "@/lib/git-types";
 import type { FileIndexEntry } from "@/lib/file-fuzzy";
-import { uploadFiles, type DroppedItem, type UploadConflictStrategy, type UploadError, type UploadResponse } from "@/lib/file-upload-client";
+import { loadUploadsDir, uploadFiles, type DroppedItem, type UploadConflictStrategy, type UploadError, type UploadResponse } from "@/lib/file-upload-client";
 import { buildSearchTree, type SearchTreeNode } from "@/lib/search-tree";
 import type { FileTreeHiddenReason } from "@/lib/file-tree-visibility";
 import { createExpandedPathsMemory } from "@/lib/file-tree-expansion";
@@ -1117,7 +1117,10 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const handleUploadInput = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    void prepareUpload(files, cwd);
+    // The toolbar's Upload button has no folder of its own: PI_WEB_UPLOADS_DIR
+    // takes it, otherwise it lands in the cwd it shows. Drops keep their own
+    // target (a folder row, or the cwd for the panel background).
+    void loadUploadsDir().then((uploadsDir) => prepareUpload(files, uploadsDir ?? cwd));
   }, [cwd, prepareUpload]);
 
   useImperativeHandle(ref, () => ({

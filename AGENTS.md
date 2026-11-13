@@ -160,7 +160,7 @@ lib/
   display-path.ts           display-only ~ / ./ path shortening for settings panels
   default-cwd.ts            dated ~/pi-cwd/YYYYMMDD path for "Use default directory"
   default-files-dir.ts      PI_WEB_FILES_DIR: the existing directory the files browser falls back to; also an allowed file root
-  uploads-dir.ts            PI_WEB_UPLOADS_DIR: where chat drops and attach-button files upload; created on the first drop, also an allowed file root
+  uploads-dir.ts            PI_WEB_UPLOADS_DIR: where untargeted uploads (chat drops, attach button, the files' Upload button) go; created on the first upload, also an allowed file root
   worktree.ts               project/worktree resolution and git worktree operations
   draft-store.ts            local draft persistence
   extension-ui-queue.ts     FIFO queues for extension dialogs and custom panels, by request id; isBlockingExtensionUiRequest() (which method a run waits on)
