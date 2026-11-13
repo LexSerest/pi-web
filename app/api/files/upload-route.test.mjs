@@ -120,6 +120,24 @@ test("error and skip conflict strategies preserve the existing file", async () =
   assert.equal(fs.readFileSync(destination, "utf8"), "original contents");
 });
 
+test("a configured uploads folder is created and accepts the first chat upload", async (t) => {
+  const uploads = path.join(base, "pi-uploads");
+  const previousUploadsDir = process.env.PI_WEB_UPLOADS_DIR;
+  const previousCache = globalThis.__piAllowedRootsCache;
+  process.env.PI_WEB_UPLOADS_DIR = uploads;
+  globalThis.__piAllowedRootsCache = undefined;
+  t.after(() => {
+    if (previousUploadsDir === undefined) delete process.env.PI_WEB_UPLOADS_DIR;
+    else process.env.PI_WEB_UPLOADS_DIR = previousUploadsDir;
+    globalThis.__piAllowedRootsCache = previousCache;
+  });
+
+  const response = await upload(uploads, "skip", ["dropped.txt"]);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { uploaded: ["dropped.txt"], skipped: [], errors: [] });
+  assert.equal(fs.readFileSync(path.join(uploads, "dropped.txt"), "utf8"), "replacement");
+});
+
 test("overwrite refuses directories and directory links without touching their targets", async () => {
   const { directory } = fixture();
   const outside = fs.mkdtempSync(path.join(base, "outside-"));

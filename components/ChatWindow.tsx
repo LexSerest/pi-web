@@ -14,7 +14,7 @@ import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-fi
 import { getFinalAnswerViews, keepWrittenFiles, type FinalAnswerViews } from "@/lib/turn-views";
 import { formatTurnDuration, getTurnDurationMs } from "@/lib/turn-duration";
 import { buildQuotedSelection } from "@/lib/quoted-selection";
-import { dropMentionText, splitDroppedItems, uploadFiles, type DroppedItem } from "@/lib/file-upload-client";
+import { dropMentionText, loadUploadsDir, splitDroppedItems, uploadFiles, type DroppedItem } from "@/lib/file-upload-client";
 import { MessageView } from "./MessageView";
 import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, getUserMessageDraftImages, getUserMessageText, type ChatInputHandle } from "./ChatInput";
@@ -762,28 +762,31 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
   useEffect(() => () => { onContextUsageChange?.(null); }, [onContextUsageChange]);
 
   // Images attach to the prompt. Other files go through the file explorer's
-  // upload into the working directory, never replacing a file already there,
-  // and come back as @mentions. The composer's attach button takes the same
-  // path, for phones that cannot drop files.
+  // upload, never replacing a file already there, and come back as @mentions.
+  // PI_WEB_UPLOADS_DIR sends them to the operator's folder instead of the
+  // working directory, so the mentions carry absolute paths; the composer's
+  // attach button takes the same path, for phones that cannot drop files.
   const uploadDroppedFiles = useCallback(async (files: File[]) => {
+    const uploadsDir = await loadUploadsDir();
     const cwd = session?.cwd ?? newSessionCwd;
-    if (!cwd) {
+    const directory = uploadsDir ?? cwd;
+    if (!directory) {
       addNotice({ type: "warning", message: t("chat.dropNeedsCwd") });
       return;
     }
     try {
-      const { status, data } = await uploadFiles(cwd, files, "skip");
+      const { status, data } = await uploadFiles(directory, files, "skip");
       if (status !== 200 && status !== 207) throw new Error(data.error ?? `HTTP ${status}`);
       const uploaded = data.uploaded ?? [];
       const skipped = data.skipped ?? [];
-      const mentions = dropMentionText(files, [...uploaded, ...skipped]);
+      const mentions = dropMentionText(files, [...uploaded, ...skipped], uploadsDir ?? undefined);
       if (mentions) chatInputRef?.current?.insertText(mentions);
       if (uploaded.length > 0) {
-        addNotice({ type: "success", message: t("chat.dropUploaded", { count: uploaded.length }) });
+        addNotice({ type: "success", message: t("chat.dropUploaded", { count: uploaded.length, directory }) });
         onFilesUploaded?.();
       }
       if (skipped.length > 0) {
-        addNotice({ type: "warning", message: t("chat.dropAlreadyExists", { names: skipped.join(", ") }) });
+        addNotice({ type: "warning", message: t("chat.dropAlreadyExists", { names: skipped.join(", "), directory }) });
       }
       for (const failure of data.errors ?? []) {
         addNotice({ type: "error", message: t("chat.dropFailed", { message: `${failure.name}: ${failure.error}` }) });

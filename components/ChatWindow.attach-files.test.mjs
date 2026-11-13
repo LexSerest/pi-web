@@ -29,7 +29,7 @@ const report = new File(["x"], "report.pdf", { type: "application/pdf" });
 const log = new File(["x"], "server.log", { type: "" });
 
 /** Picks files with the composer's attach button, through ChatWindow's real drop path. */
-async function attach(files, { cwd = "/project", response } = {}) {
+async function attach(files, { cwd = "/project", uploadsDir = null, response } = {}) {
   const calls = { images: [], uploads: [], mentions: [], notices: [], refreshed: 0 };
   const scope = {
     session: null,
@@ -43,6 +43,7 @@ async function attach(files, { cwd = "/project", response } = {}) {
     addNotice: (notice) => calls.notices.push([notice.type, notice.message]),
     t: (key, vars) => (vars ? `${key} ${JSON.stringify(vars)}` : key),
     onFilesUploaded: () => { calls.refreshed += 1; },
+    loadUploadsDir: async () => uploadsDir,
     splitDroppedItems,
     dropMentionText,
     uploadFiles: async (target, uploads, strategy) => {
@@ -66,8 +67,8 @@ test("the attach button sends picked files down the chat drop path (#1101)", asy
   assert.deepEqual(mixed.uploads, [["/project", ["report.pdf", "server.log"], "skip"]]);
   assert.deepEqual(mixed.mentions, ["@report.pdf @server.log "]);
   assert.deepEqual(mixed.notices, [
-    ["success", 'chat.dropUploaded {"count":1}'],
-    ["warning", 'chat.dropAlreadyExists {"names":"server.log"}'],
+    ["success", 'chat.dropUploaded {"count":1,"directory":"/project"}'],
+    ["warning", 'chat.dropAlreadyExists {"names":"server.log","directory":"/project"}'],
   ]);
   assert.equal(mixed.refreshed, 1);
 
@@ -75,6 +76,19 @@ test("the attach button sends picked files down the chat drop path (#1101)", asy
   assert.deepEqual(imagesOnly.images, [photo]);
   assert.deepEqual(imagesOnly.uploads, []);
   assert.deepEqual(imagesOnly.notices, []);
+});
+
+test("a configured uploads folder takes the files and their mentions carry its path", async () => {
+  const calls = await attach([photo, report], {
+    uploadsDir: "/tmp/pi uploads",
+    response: { status: 200, data: { uploaded: ["report.pdf"] } },
+  });
+  assert.deepEqual(calls.images, [photo]);
+  assert.deepEqual(calls.uploads, [["/tmp/pi uploads", ["report.pdf"], "skip"]]);
+  assert.deepEqual(calls.mentions, ['@"/tmp/pi uploads/report.pdf" ']);
+  assert.deepEqual(calls.notices, [
+    ["success", 'chat.dropUploaded {"count":1,"directory":"/tmp/pi uploads"}'],
+  ]);
 });
 
 test("without a working directory, picked files behave like a drop there (#1101)", async () => {

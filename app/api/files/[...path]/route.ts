@@ -32,6 +32,7 @@ import { parseFormDataWithinLimit, RequestBodyTooLargeError } from "@/lib/bounde
 import { filePathFromApiSegments, samePath } from "@/lib/paths";
 import { hasParentDirectorySegment } from "@/lib/path-security";
 import { readTextPreviewChunk } from "@/lib/text-preview";
+import { configuredUploadsDir, ensureUploadsDir } from "@/lib/uploads-dir";
 import { registerFileWatch } from "@/lib/file-watch-registry";
 import { FILE_WATCH_HEARTBEAT_MS } from "@/lib/file-version";
 import { pageStreamLabel, registerPageStream } from "@/lib/page-stream-registry";
@@ -88,6 +89,22 @@ async function getUploadDirectory(segments: string[]): Promise<
   { directory: string } | { response: NextResponse }
 > {
   const directory = filePathFromApiSegments(segments);
+  // A configured chat uploads folder may not exist yet: the first drop creates
+  // it, so the client never has to mkdir before upload.
+  const uploadsDir = configuredUploadsDir();
+  if (uploadsDir && samePath(directory, uploadsDir)) {
+    try {
+      await ensureUploadsDir();
+    } catch (error) {
+      return {
+        response: NextResponse.json(
+          { error: error instanceof Error ? error.message : String(error) },
+          { status: 500 },
+        ),
+      };
+    }
+  }
+
   const allowedRoots = await getAllowedFileRoots();
   if (!isFilePathAllowed(directory, allowedRoots)) {
     return { response: NextResponse.json({ error: "Access denied" }, { status: 403 }) };

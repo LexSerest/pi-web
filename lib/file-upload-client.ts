@@ -1,5 +1,5 @@
 import { buildAtMentionText } from "./file-fuzzy";
-import { encodeFilePathForApi } from "./file-paths";
+import { encodeFilePathForApi, joinFilePath } from "./file-paths";
 
 /** Browser side of `POST /api/files/[...path]?type=upload`; mirrors `lib/file-upload.ts`. */
 export type UploadConflictStrategy = "error" | "overwrite" | "skip";
@@ -61,6 +61,25 @@ export function uploadFiles(
   });
 }
 
+/**
+ * The operator's chat uploads folder (PI_WEB_UPLOADS_DIR), asked for once per
+ * page from `/api/home`. Null means uploads go to the working directory.
+ */
+let uploadsDirRequest: Promise<string | null> | null = null;
+
+export function loadUploadsDir(): Promise<string | null> {
+  uploadsDirRequest ??= fetch("/api/home")
+    .then((response) => response.json())
+    .then((data: { uploadsDir?: string | null }) => data.uploadsDir ?? null)
+    .catch(() => {
+      // A failed lookup falls back to the working directory; ask again on the
+      // next drop rather than pinning the page to that answer.
+      uploadsDirRequest = null;
+      return null;
+    });
+  return uploadsDirRequest;
+}
+
 /** One file or folder dropped onto the chat. */
 export type DroppedItem = { kind: "file"; file: File } | { kind: "folder"; name: string };
 
@@ -84,15 +103,19 @@ export function splitDroppedItems(items: DroppedItem[]): { images: File[]; files
 }
 
 /**
- * The `@` mentions for files now in the working directory, in drop order.
+ * The `@` mentions for files the upload reports as written or already there,
+ * in drop order. Without `directory` the files are in the working directory and
+ * are mentioned by name; with it (PI_WEB_UPLOADS_DIR) the mention carries the
+ * absolute path, since the file is not under the session's cwd.
  * @param files The dropped files
  * @param present Names the upload reports as written or already there
+ * @param directory Where the upload landed, when it is not the working directory
  * @returns Mentions ready to insert, or an empty string
  */
-export function dropMentionText(files: File[], present: string[]): string {
+export function dropMentionText(files: File[], present: string[], directory?: string): string {
   const names = new Set(present);
   return files
     .filter((file) => names.has(file.name))
-    .map((file) => buildAtMentionText(file.name, false))
+    .map((file) => buildAtMentionText(directory ? joinFilePath(directory, file.name) : file.name, false))
     .join("");
 }

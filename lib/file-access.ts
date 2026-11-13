@@ -1,6 +1,7 @@
 import { getAdditionalAllowedRoots, normalizeSlashes } from "./allowed-roots";
 import { existingFilesDir } from "./default-files-dir";
 import { isExistingPathWithinRoots, isPathWithinRoots } from "./path-security";
+import { configuredUploadsDir } from "./uploads-dir";
 import { listAllSessions } from "./session-reader";
 export { allowFileRoot, normalizeSlashes } from "./allowed-roots";
 export { isWindowsAbsolutePath } from "./paths";
@@ -35,6 +36,11 @@ export async function getAllowedFileRoots(): Promise<Set<string>> {
   // browser's fallback folder can be listed (and uploaded to, watched, ...).
   const filesDir = await existingFilesDir();
   if (filesDir) roots.add(normalizeSlashes(filesDir));
+
+  // The chat uploads folder is a writable destination of its own. It is added
+  // even before it exists: the upload route creates it on the first drop.
+  const uploadsDir = configuredUploadsDir();
+  if (uploadsDir) roots.add(normalizeSlashes(uploadsDir));
 
   globalThis.__piAllowedRootsCache = { roots, expiresAt: now + ALLOWED_ROOTS_TTL_MS };
   return roots;
