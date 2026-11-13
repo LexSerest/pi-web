@@ -71,6 +71,8 @@ interface Props {
   placeholder?: string;
   /** Shown as ~ in the boxes' paths. */
   homeDir?: string;
+  /** A regular user's fixed PI_WEB_FILES_DIR: the project is shown, never switched, and no worktree control appears. */
+  locked?: boolean;
   /** Running and unread counts by project key: badges in the project menu, and a dot in the files' project box for activity elsewhere. */
   projectActivity?: ReadonlyMap<string, { running: number; unread: number }>;
   /** The files' (stacked or row), without a worktree list: a disabled box saying why (a subdirectory of a checkout, still checking). None for a folder outside git: the project box alone. */
@@ -80,7 +82,7 @@ interface Props {
   handleRef?: Ref<ProjectWorktreePickerHandle>;
   /** A project or checkout other than the one in use was picked, or a checkout was just created. */
   onPick: (target: NewSessionTarget, from: ProjectWorktreeControl) => void;
-  /** Given, the menu offers "Use default directory"; with PI_WEB_FILES_DIR set the owner leaves it out. */
+  /** Given, the menu offers "Use default directory"; a fixed PI_WEB_FILES_DIR leaves it out. */
   onUseDefaultDirectory?: () => void;
   /** "Open another project…": the folder picker. Focus goes back to `opener` when nothing moves. */
   onOpenFolder: (opener: HTMLElement | null) => void;
@@ -206,6 +208,7 @@ export function ProjectWorktreePicker({
   label,
   placeholder = "",
   homeDir,
+  locked = false,
   projectActivity,
   worktreeHint = null,
   newWorktreeTitle,
@@ -259,6 +262,7 @@ export function ProjectWorktreePicker({
   const closeMenu = () => setMenu(null);
 
   const openMenu = (kind: ProjectWorktreeControl, opener: HTMLElement) => {
+    if (locked) return;
     const rect = opener.getBoundingClientRect();
     // At least as wide as its box, as main's dropdowns were.
     const width = Math.max(stacked ? STACKED_MENU_MIN_WIDTH : kind === "project" ? 260 : 240, Math.round(rect.width));
@@ -511,7 +515,7 @@ export function ProjectWorktreePicker({
     ? { placeholder: t("sidebar.filterProjects"), emptyLabel: t("sidebar.noMatchingProjects"), minChoices: classic ? 9 : undefined }
     : { placeholder: t("sidebar.filterWorktrees"), emptyLabel: t("sidebar.noMatchingWorktrees") };
   // A dot in the files' project box: something runs or waits in another project.
-  const otherActivity = stacked && projectActivity !== undefined && [...projectActivity].some(
+  const otherActivity = !locked && stacked && projectActivity !== undefined && [...projectActivity].some(
     ([key, { running, unread }]) => key !== project?.key && (running > 0 || unread > 0),
   );
 
@@ -520,11 +524,13 @@ export function ProjectWorktreePicker({
       <button
         ref={projectRef}
         type="button"
-        className={project ? "project-picker-button is-project" : "project-picker-button is-project is-empty"}
+        className={`project-picker-button is-project${project ? "" : " is-empty"}${locked ? " is-inactive" : ""}`}
         title={project?.root ?? ""}
-        aria-haspopup="menu"
-        aria-expanded={menu?.kind === "project"}
-        onClick={(event) => openMenu("project", event.currentTarget)}
+        aria-haspopup={locked ? undefined : "menu"}
+        aria-expanded={locked ? undefined : menu?.kind === "project"}
+        aria-disabled={locked || undefined}
+        tabIndex={locked ? -1 : undefined}
+        onClick={locked ? undefined : (event) => openMenu("project", event.currentTarget)}
       >
         {/* Inline: a folder icon, the name (cut at its end) and a chevron;
             the tooltip is the path. The files': the whole path, cut at its
@@ -548,9 +554,9 @@ export function ProjectWorktreePicker({
         {otherActivity && (
           <span className="project-picker-activity" role="img" title={t("sidebar.newActivity")} aria-label={t("sidebar.newActivity")} />
         )}
-        {inline && <ChevronIcon size={9} className="project-picker-chevron sidebar-icon-down" />}
+        {inline && !locked && <ChevronIcon size={9} className="project-picker-chevron sidebar-icon-down" />}
       </button>
-      {worktrees && (
+      {worktrees && !locked && (
         <button
           ref={worktreeRef}
           type="button"
@@ -572,7 +578,7 @@ export function ProjectWorktreePicker({
           <ChevronIcon size={9} className="project-picker-chevron sidebar-icon-down" />
         </button>
       )}
-      {!worktrees && stacked && worktreeHint && (
+      {!worktrees && !locked && stacked && worktreeHint && (
         <button type="button" aria-disabled="true" tabIndex={-1} title={worktreeHint.title} className="project-picker-button is-inactive">
           <BranchIcon size={11} className="project-picker-icon" />
           <span className="project-picker-label">{worktreeHint.label}</span>

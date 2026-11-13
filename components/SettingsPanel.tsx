@@ -21,6 +21,7 @@ import type { ProjectTrustStatus, ToolSettingsResponse } from "@/lib/api-types";
 import { SETTINGS_BUILTIN_TOOLS } from "@/lib/tool-presets";
 import {
   setLastSettingsSection,
+  settingsSectionAvailable,
   settingsSectionRequiresProject,
   type SettingsSection,
 } from "@/lib/settings-navigation";
@@ -44,6 +45,11 @@ interface Props {
   initialSection: SettingsSection;
   /** A phone opens on the list of sections instead of `initialSection` (the plain Settings button). */
   openAtHome?: boolean;
+  /**
+   * A regular user (no admin mode) sees General alone and none of the
+   * server/project configuration inside it. Defaults to true for other callers.
+   */
+  adminMode?: boolean;
   onClose: () => void;
   onSessionReloaded: () => void;
   quoteSelectionEnabled: boolean;
@@ -78,7 +84,7 @@ export function SettingsSectionIcon({ section, size = 16, strokeWidth = 1.8 }: {
   return <svg {...common}><path d="M9 7V2M15 7V2M6 13V8a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v5a6 6 0 0 1-12 0ZM12 19v3" /></svg>;
 }
 
-function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, onQuoteSelectionChange }: Pick<Props, "sessionId" | "onSessionReloaded" | "quoteSelectionEnabled" | "onQuoteSelectionChange">) {
+function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, onQuoteSelectionChange, adminMode }: Pick<Props, "sessionId" | "onSessionReloaded" | "quoteSelectionEnabled" | "onQuoteSelectionChange"> & { adminMode: boolean }) {
   const { locale, setLocale, supportedLocales, t } = useI18n();
   const { preference, setThemePreference } = useTheme();
   const { width: chatContentWidth, setWidth: setChatContentWidth, fontSize, setFontSize } = useChatAppearance();
@@ -122,6 +128,7 @@ function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, 
   };
 
   useEffect(() => {
+    if (!adminMode) return;
     let cancelled = false;
     void fetch("/api/tools/settings")
       .then(async (response) => {
@@ -133,7 +140,7 @@ function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, 
         if (!cancelled) setShellError(cause instanceof Error ? cause.message : String(cause));
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [adminMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -448,7 +455,7 @@ function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, 
         <p id="settings-files-placement-description" className="settings-general-description">{t("settings.filesPlacementDescription")}</p>
       </section>
 
-      {shellSettings && (
+      {adminMode && shellSettings && (
         <section className="settings-general-section">
           <h3 className="settings-general-heading">{t("settings.builtinTools")}</h3>
           <p id="settings-builtin-tools-description" className="settings-general-description">{t("settings.builtinToolsDescription")}</p>
@@ -470,7 +477,7 @@ function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, 
         </section>
       )}
 
-      {shellSettings?.isWindows && (
+      {adminMode && shellSettings?.isWindows && (
         <section className="settings-general-section">
           <h3 className="settings-general-heading">{t("settings.shellTool")}</h3>
           <p className="settings-general-description">{t("settings.shellToolDescription")}</p>
@@ -640,6 +647,7 @@ export function SettingsPanel({
   sessionId,
   initialSection,
   openAtHome = false,
+  adminMode = true,
   onClose: closeSettings,
   onSessionReloaded,
   quoteSelectionEnabled,
@@ -649,9 +657,10 @@ export function SettingsPanel({
   onProjectTrustChanged,
 }: Props) {
   const { t } = useI18n();
-  const [section, setSection] = useState<SettingsSection>(initialSection);
+  const initialAvailable = settingsSectionAvailable(initialSection, adminMode);
+  const [section, setSection] = useState<SettingsSection>(initialAvailable ? initialSection : "general");
   const [mountedSections, setMountedSections] = useState<ReadonlySet<SettingsSection>>(
-    () => new Set([section]),
+    () => new Set([initialAvailable ? initialSection : "general"]),
   );
   // Which sections need a project is decided once, in lib/settings-navigation.ts.
   const sections: { id: SettingsSection; label: string; requiresProject: boolean }[] = ([
@@ -661,7 +670,9 @@ export function SettingsPanel({
     { id: "agents", label: t("common.agents") },
     { id: "plugins", label: t("common.plugins") },
     { id: "mcp", label: t("settings.mcp") },
-  ] as const).map((item) => ({ ...item, requiresProject: settingsSectionRequiresProject(item.id) }));
+  ] as const)
+    .filter((item) => settingsSectionAvailable(item.id, adminMode))
+    .map((item) => ({ ...item, requiresProject: settingsSectionRequiresProject(item.id) }));
   const sectionRequiresProject = settingsSectionRequiresProject(section);
   const isPhone = useIsMobile();
   const phone = usePhoneSettingsLevel(isPhone, openAtHome);
@@ -695,7 +706,7 @@ export function SettingsPanel({
     reportDetailTitle: setDetailTitle,
   }), [enterPhoneLevel, goUpPhoneLevel, phone.level, phoneLevelRef]);
 
-  useEffect(() => setLastSettingsSection(initialSection), [initialSection]);
+  useEffect(() => setLastSettingsSection(settingsSectionAvailable(initialSection, adminMode) ? initialSection : "general"), [adminMode, initialSection]);
 
   // Bubble phase, unless something nearer handled the key. The trust dialog,
   // which opens above Settings, takes Escape in the capture phase and stops it,
@@ -710,6 +721,13 @@ export function SettingsPanel({
   useLayoutEffect(() => focusModalPanel(document, dialogRef.current, {
     restoreTextEntry: !window.matchMedia?.("(pointer: coarse)").matches,
   }), []);
+
+  useEffect(() => {
+    if (settingsSectionAvailable(section, adminMode)) return;
+    setSection("general");
+    setMountedSections((current) => new Set(current).add("general"));
+    setLastSettingsSection("general");
+  }, [adminMode, section]);
 
   useEffect(() => {
     if (cwd || !sectionRequiresProject) return;
@@ -829,7 +847,7 @@ export function SettingsPanel({
             </nav>
           )}
           <ConfigDetailNavigationContext.Provider value={detailNavigation}>
-          {sectionHost("general", <GeneralSettings sessionId={sessionId} onSessionReloaded={onSessionReloaded} quoteSelectionEnabled={quoteSelectionEnabled} onQuoteSelectionChange={onQuoteSelectionChange} />)}
+          {sectionHost("general", <GeneralSettings adminMode={adminMode} sessionId={sessionId} onSessionReloaded={onSessionReloaded} quoteSelectionEnabled={quoteSelectionEnabled} onQuoteSelectionChange={onQuoteSelectionChange} />)}
           {sectionHost("models", <ModelsConfig embedded cwd={cwd} onClose={onClose} />)}
           {/* Visited sections stay mounted, so the ones whose answer depends on trust take the page's
               status and load again in place when trusting from Settings › MCP changes it. */}

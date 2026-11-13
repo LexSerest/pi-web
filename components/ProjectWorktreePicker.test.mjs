@@ -154,6 +154,18 @@ test("stacked: no project yet, and no worktree list", () => {
   assert.doesNotMatch(render({ layout: "inline", context: { ...context, worktrees: null }, worktreeHint: hint }), /is-inactive|project-picker-divider/);
 });
 
+test("a locked picker shows the fixed project with no menu and no worktree control", () => {
+  for (const layout of ["stacked", "row", "inline"]) {
+    const html = render({ layout, locked: true, homeDir: "/home/me" });
+    assert.match(html, /class="project-picker-button is-project is-inactive"/, layout);
+    assert.match(html, /aria-disabled="true"/, layout);
+    assert.doesNotMatch(html, /aria-haspopup="menu"|aria-expanded|project-picker-chevron|<button[^>]*>[^<]*Worktree/, layout);
+    assert.equal((html.match(/<button /g) ?? []).length, 1, layout);
+    // Its path (or name) stays readable: a fixed folder is still shown.
+    assert.match(html, /\/work\/app|>app<\/span>/, layout);
+  }
+});
+
 test("only the files tab removes worktrees, never the main one", () => {
   assert.match(source, /secondary: onRemoveWorktree && !worktree\.isMain \? \{/);
 });

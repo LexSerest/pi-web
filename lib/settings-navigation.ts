@@ -20,6 +20,15 @@ export function settingsSectionRequiresProject(section: SettingsSection): boolea
   return PROJECT_SECTIONS.has(section);
 }
 
+/**
+ * Whether this browser shows the section. A regular user (no admin mode) sees
+ * General alone: models, skills, agents, plugins and MCP configure the server
+ * or a project, not the chat they were given.
+ */
+export function settingsSectionAvailable(section: SettingsSection, adminMode: boolean): boolean {
+  return adminMode || section === "general";
+}
+
 interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;

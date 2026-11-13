@@ -78,8 +78,8 @@ Other supported/consumed variables can be supplied through the `environment:` se
 - `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`: outbound proxy configuration.
 - `PI_OFFLINE`: disable online model-catalog/plugin checks.
 - `PI_WEB_DISABLE_MCP`: disable MCP integration.
-- `PI_WEB_DISABLE_TERMINAL`: hide the workspace terminal and refuse new terminal sessions.
-- `PI_WEB_FILES_DIR`: directory the Files browser shows when no project or session is selected, and the folder picker's boundary (must exist; `~` is expanded).
+- `PI_WEB_DISABLE_TERMINAL`: hide the workspace terminal for everyone, admin mode included, and refuse new terminal sessions.
+- `PI_WEB_FILES_DIR`: directory a regular browser is fixed to, and the default project of a fresh page; admin mode may switch anywhere (must exist; `~` is expanded).
 - `PI_WEB_HIDE_DOTFILES`: hide dot-named files and folders from the file tree, its search, `@` suggestions and the changed-files view.
 - `PI_WEB_PUSH_SUBJECT`: optional Web Push VAPID subject.
 - `GITHUB_TOKEN` or `GH_TOKEN`: optional GitHub API token used by skill update checks; `SKILLS_API_URL` overrides the skills service base URL.

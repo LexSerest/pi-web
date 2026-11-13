@@ -62,12 +62,25 @@ For port and hostname, command-line options override the corresponding environme
 | `PI_WEB_SKIP_VERSION_CHECK=1` | Disable Pi Web update checks | Unset |
 | `PI_WEB_ALLOWED_HOSTS` | Additional exact proxy or custom hostnames, comma-separated | Unset |
 | `PI_WEB_PASSWORD` | Enable browser password login; API clients may use Basic Auth with username `pi` | Authentication disabled |
-| `PI_WEB_DISABLE_TERMINAL` | Hide the workspace terminal: the sidebar offers no terminal tab and `POST /api/terminal` is refused | Terminal available |
-| `PI_WEB_FILES_DIR` | Directory the Files browser shows when no project or session has picked one, and the folder picker stays inside it; it must exist, and `~` is expanded | Unset |
+| `PI_WEB_DISABLE_TERMINAL` | Hide the workspace terminal for everyone, admin mode included: the sidebar offers no terminal tab and `POST /api/terminal` is refused | Terminal available in admin mode only |
+| `PI_WEB_FILES_DIR` | Directory a regular browser is fixed to and the default project of a fresh page; the folder picker stays inside it. Admin mode may switch anywhere. It must exist, and `~` is expanded | Unset |
 | `PI_WEB_HIDE_DOTFILES` | Hide files and folders whose names start with a dot from the file tree, its search and `@` suggestions, and the changed-files view; direct paths still open | Unset |
 | `PI_WEB_IDLE_TIMEOUT_MS` | Session idle timeout in milliseconds, up to `2147483647`; `0` disables idle shutdown; invalid or out-of-range values use the default | `600000` (10 min) |
 | `PI_WEB_SHUTDOWN_DEADLINE_MS` | How long extensions get to handle `session_shutdown` before a closing session is disposed anyway, in milliseconds up to `2147483647`; `0`, invalid or out-of-range values use the default | `5000` (5 s) |
 | `PI_CODEMODE_MAX_WORKERS` | pi's limit on codemode scripts running at once, shared by every session and subagent in the server; pi's own default is `2`, and pi-web sets `8` when the variable is unset or empty. Each script may use up to 256 MB | `8` |
+
+### Admin mode (browser)
+
+A browser without admin mode is the regular-user view: the workspace terminal is hidden, the Settings panel shows General alone (without the tool and shell sections), the Models and Skills shortcuts are hidden, and with `PI_WEB_FILES_DIR` set the session list, project picker, worktree picker and folder picker stay on that folder. This is a UI convenience, not a security boundary; the server routes still answer whoever calls them.
+
+To enable the full view in this browser, run this in its DevTools console and reload (clearing the key goes back):
+
+```js
+localStorage.setItem("pi-web:admin-mode", "1");
+// The short key works too: localStorage.setItem("admin-mode", "1")
+```
+
+Any value but empty, `0` or `false` enables it.
 
 Set `PI_WEB_APP_NAME` before starting the server (for example, `PI_WEB_APP_NAME='Work Pi' pi-web`). After changing it, restart the server to serve the new manifest; no rebuild is required. Updates to the name of an already installed PWA are managed by the browser and are not guaranteed to appear immediately. This does not change the page title or icons.
 

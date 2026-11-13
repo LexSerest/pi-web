@@ -57,6 +57,7 @@ import {
   worktreeCreateFailure,
 } from "@/lib/sidebar-actions";
 import { shortenPath } from "@/lib/display-path";
+import { isPathInsideDirectory } from "@/lib/access-mode";
 import { splitBeforeForkSuffix } from "@/lib/session-fork-name";
 import {
   mergeProjectChoices,
@@ -240,6 +241,12 @@ interface Props {
   onOpenTerminal?: (cwd: string) => void;
   /** False hides the terminal key entirely (`PI_WEB_DISABLE_TERMINAL`); a missing handler alone shows it disabled. */
   terminalEnabled?: boolean;
+  /**
+   * A regular user (no admin mode): with PI_WEB_FILES_DIR set, the sidebar
+   * keeps that folder and offers no project, worktree or "another project"
+   * switch.
+   */
+  restricted?: boolean;
   explorerRefreshKey?: number;
   onExplorerRefresh?: () => void;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
@@ -514,7 +521,7 @@ function buttonAnchor(element: HTMLElement, align: "start" | "end"): SidebarMenu
   return { kind: "rect", rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }, align };
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, controlRef, onNewSessionContextChange, initialSessionId, initialSessionLinked, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, onOpenTerminal, terminalEnabled = true, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, onBackgroundTaskDone, hiddenFinishedSessionIds, onRunningSessionIdsChange, onSessionsChange }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, controlRef, onNewSessionContextChange, initialSessionId, initialSessionLinked, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, onOpenTerminal, terminalEnabled = true, restricted = false, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, onBackgroundTaskDone, hiddenFinishedSessionIds, onRunningSessionIdsChange, onSessionsChange }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
@@ -530,6 +537,17 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [selectedCwd, setSelectedCwd] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string>("");
   const [defaultFilesDir, setDefaultFilesDir] = useState<string | null>(null);
+  // The default folder decides the first cwd; the session list must not pick a
+  // recent project before /api/home answers, or the configured folder never
+  // becomes the default.
+  const [homeLoaded, setHomeLoaded] = useState(false);
+  // A regular user's session list is scoped to PI_WEB_FILES_DIR: chats from
+  // other folders belong to admin mode. Without a configured folder there is
+  // nothing to scope to.
+  const fixedDirectory = restricted && defaultFilesDir ? defaultFilesDir : null;
+  const fixedDirectoryRef = useRef<string | null>(null);
+  fixedDirectoryRef.current = fixedDirectory;
+  const visibleSessionIdsRef = useRef<Set<string>>(new Set());
   // Open for the files tab's project list, or for the composer's bar ("new-session").
   const [customPathOpen, setCustomPathOpen] = useState<false | "files" | "new-session">(false);
   const [customPathValue, setCustomPathValue] = useState(loadLastCustomCwd);
@@ -856,23 +874,31 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       };
       if (loadId !== sessionLoadIdRef.current) return;
       sessionListVersionRef.current = data.sessionListVersion;
-      setAllSessions(data.sessions);
+      const fixed = fixedDirectoryRef.current;
+      const sessions = fixed
+        ? data.sessions.filter((session) => isPathInsideDirectory(session.cwd, fixed))
+        : data.sessions;
+      visibleSessionIdsRef.current = new Set(sessions.map((session) => session.id));
+      setAllSessions(sessions);
       if (!summary) setSessionDetailsLoaded(true);
       // Treat the fetched running set as an initial fallback only. Once the
       // lightweight poll is live, a slow session-list fetch cannot overwrite it.
+      const visibleRunning = (ids: string[] | undefined) => fixed
+        ? (ids ?? []).filter((id) => visibleSessionIdsRef.current.has(id))
+        : (ids ?? []);
       if (!runningPollAuthoritativeRef.current) {
         currentSuppressedCompletionSessionIdsRef.current = new Set(
           data.completionNotificationSuppressedSessionIds ?? [],
         );
         runningObservedAtRef.current = { latest: Date.now(), before: runningObservedAtRef.current.latest };
-        setRunningSessionIds((previous) => sameIdsOr(previous, data.runningSessionIds ?? []));
-        setAwaitingInputSessionIds((previous) => sameIdsOr(previous, data.awaitingInputSessionIds ?? []));
+        setRunningSessionIds((previous) => sameIdsOr(previous, visibleRunning(data.runningSessionIds)));
+        setAwaitingInputSessionIds((previous) => sameIdsOr(previous, visibleRunning(data.awaitingInputSessionIds)));
       }
       // Drop markers for deleted sessions and for hidden family members
       // (subagents, side chats), whose completion is intentionally silent
       // even if an older client marked them unread.
       const unreadEligibleIds = new Set(
-        data.sessions
+        sessions
           .filter((session) => !isHiddenRelation(session.relation))
           .map((session) => session.id),
       );
@@ -888,6 +914,16 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       if (loadId === sessionLoadIdRef.current) setLoading(false);
     }
   }, []);
+
+  // The scoped session list: a fixed folder learned after the first list was
+  // read (or admin mode switched in another tab) needs that list read again.
+  // A fetch still in flight already reads fixedDirectoryRef when it answers.
+  const previousFixedDirectoryRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (previousFixedDirectoryRef.current === fixedDirectory) return;
+    previousFixedDirectoryRef.current = fixedDirectory;
+    if (sessionListVersionRef.current !== null) void loadSessions();
+  }, [fixedDirectory, loadSessions]);
 
   const initialLoadDone = useRef(false);
   useEffect(() => {
@@ -1048,9 +1084,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         currentSuppressedCompletionSessionIdsRef.current = new Set(
           data.completionNotificationSuppressedSessionIds ?? [],
         );
-        setRunningSessionIds((previous) => sameIdsOr(previous, data.runningSessionIds ?? []));
-        setAwaitingInputSessionIds((previous) => sameIdsOr(previous, data.awaitingInputSessionIds ?? []));
-        setSubagentsActiveSessionIds((previous) => sameIdsOr(previous, data.subagentsActiveSessionIds ?? []));
+        const fixed = fixedDirectoryRef.current;
+        const visibleRunning = (ids: string[] | undefined) => fixed
+          ? (ids ?? []).filter((id) => visibleSessionIdsRef.current.has(id))
+          : (ids ?? []);
+        setRunningSessionIds((previous) => sameIdsOr(previous, visibleRunning(data.runningSessionIds)));
+        setAwaitingInputSessionIds((previous) => sameIdsOr(previous, visibleRunning(data.awaitingInputSessionIds)));
+        setSubagentsActiveSessionIds((previous) => sameIdsOr(previous, visibleRunning(data.subagentsActiveSessionIds)));
         // Pins and archive changed in another window: reload them.
         noteUiRevision(data.sessionUiStateRevision);
         if (data.sessionListVersion !== sessionListVersionRef.current) {
@@ -1189,10 +1229,15 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   }, [explorerRefreshKey]);
 
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/home").then((r) => r.json()).then((d: { home?: string; defaultFilesDir?: string | null }) => {
+      if (cancelled) return;
       if (d.home) setHomeDir(d.home);
       setDefaultFilesDir(d.defaultFilesDir ?? null);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => {
+      if (!cancelled) setHomeLoaded(true);
+    });
+    return () => { cancelled = true; };
   }, []);
 
   const restoredRef = useRef(false);
@@ -1205,6 +1250,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // The project of the sidebar's cwd: the files tab shows it, and its group in
   // the sessions tab exists even before it has a session.
   const selectedProject = useMemo(() => projectFor(selectedCwd), [projectFor, selectedCwd]);
+  // A regular user keeps the configured folder: no project, worktree or
+  // "another project" switch. Without PI_WEB_FILES_DIR there is no folder to
+  // pin, so the pickers stay usable.
+  const lockProject = fixedDirectory !== null;
 
   // A worktree/session refresh can hydrate the stable key without changing
   // cwd, so notify when either changes. The parent treats same-cwd key changes
@@ -1282,28 +1331,36 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     return () => { cancelled = true; };
   }, [selectedCwd, wtRefreshKey, refreshKey]);
 
-  // Auto-select cwd and restore session from URL on first load
+  // Auto-select cwd and restore session from URL on first load. With
+  // PI_WEB_FILES_DIR set, that folder is the default project of every fresh
+  // page (unless this tab restores a session or the URL names a cwd), so the
+  // composer appears without picking a project first.
   useEffect(() => {
-    if (allSessions.length === 0 || skipInitialProjectSelection) return;
+    if (skipInitialProjectSelection || !homeLoaded || selectedCwd !== null) return;
 
-    if (selectedCwd === null) {
-      // If restoring a session, set cwd to match that session
-      if (initialSessionId && !restoredRef.current) {
-        restoredRef.current = true;
-        const target = allSessions.find((s) => s.id === initialSessionId);
-        if (target) {
-          setSelectedCwd(target.cwd);
-          onSelectSession(target, true);
-          return;
-        }
-        // Session not found — notify parent so it can show the placeholder
-        onInitialRestoreDone?.();
-        if (initialSessionLinked) showToast(t("sidebar.sessionNotFound"));
+    if (initialSessionId && !restoredRef.current) {
+      // The session list has to answer before a session can be restored.
+      if (allSessions.length === 0) return;
+      restoredRef.current = true;
+      const target = allSessions.find((s) => s.id === initialSessionId);
+      if (target) {
+        setSelectedCwd(target.cwd);
+        onSelectSession(target, true);
+        return;
       }
-      const projects = getRecentProjects(allSessions);
-      if (projects.length > 0) setSelectedCwd(projects[0].root);
+      // Session not found — notify parent so it can show the placeholder
+      onInitialRestoreDone?.();
+      if (initialSessionLinked) showToast(t("sidebar.sessionNotFound"));
     }
-  }, [allSessions, selectedCwd, initialSessionId, initialSessionLinked, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone, showToast, t]);
+
+    if (defaultFilesDir) {
+      setSelectedCwd(defaultFilesDir);
+      return;
+    }
+    if (allSessions.length === 0) return;
+    const projects = getRecentProjects(allSessions);
+    if (projects.length > 0) setSelectedCwd(projects[0].root);
+  }, [allSessions, selectedCwd, homeLoaded, defaultFilesDir, initialSessionId, initialSessionLinked, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone, showToast, t]);
 
   // Prefer an exact UI selection while a refetch is in flight. Once the
   // response catches up, the server-resolved path handles Windows case and
@@ -1584,7 +1641,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     groupExpansion: shownGroupExpansion,
     moreShown,
     pinnedCollapsed,
-  }), [allSessions, uiState, runningSessionIds, awaitingInputSessionIds, unreadSessionIds, selectedSessionId, currentProject, shownGroupExpansion, moreShown, pinnedCollapsed]);
+    showOpenOtherProject: !lockProject,
+  }), [allSessions, uiState, runningSessionIds, awaitingInputSessionIds, unreadSessionIds, selectedSessionId, currentProject, shownGroupExpansion, moreShown, pinnedCollapsed, lockProject]);
   // Built while the archive view is rendered, its way out included: it
   // leaves as it was, not empty.
   const archiveMounted = archiveMotion.archiveMounted;
@@ -2574,21 +2632,23 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         onSelect: () => { void applyUiState({ action: "pin-project", projectKey: project.key, root: project.root, pinned: !project.pinned }); },
       },
       ...nameItems,
-      {
-        type: "item",
-        id: "open-in-files",
-        label: t("sidebar.openInFilesTab"),
-        icon: <FolderIcon />,
-        onSelect: () => openProjectInFiles(project),
-      },
-      {
-        type: "item",
-        id: "open-new-tab",
-        label: t("sidebar.openInNewTab"),
-        icon: <OpenInNewTabIcon />,
-        shortcut: "T",
-        onSelect: () => openProjectInNewTab(project),
-      },
+      ...(lockProject ? [] : [
+        {
+          type: "item" as const,
+          id: "open-in-files",
+          label: t("sidebar.openInFilesTab"),
+          icon: <FolderIcon />,
+          onSelect: () => openProjectInFiles(project),
+        },
+        {
+          type: "item" as const,
+          id: "open-new-tab",
+          label: t("sidebar.openInNewTab"),
+          icon: <OpenInNewTabIcon />,
+          shortcut: "T",
+          onSelect: () => openProjectInNewTab(project),
+        },
+      ]),
       { type: "separator", id: "separator-layout" },
       {
         type: "item",
@@ -3022,7 +3082,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       {customPathOpen && (
         <DirectoryPicker
           initialPath={customPathValue}
-          root={defaultFilesDir}
+          root={lockProject ? defaultFilesDir : null}
           busy={customPathValidating}
           error={customPathError}
           onCancel={() => {
@@ -3323,11 +3383,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               label={t("sidebar.projectAndWorktree")}
               placeholder={initialSessionId && !restoredRef.current ? "" : t("sidebar.selectProject")}
               homeDir={homeDir}
+              locked={lockProject}
               projectActivity={projectActivity}
               worktreeHint={inactiveWorktreeSelector}
               newWorktreeTitle={t("sidebar.createWorktreeTitle")}
               onPick={handleFilesPick}
-              onUseDefaultDirectory={defaultFilesDir ? undefined : () => { void handleDefaultCwd(); }}
+              onUseDefaultDirectory={lockProject ? undefined : () => { void handleDefaultCwd(); }}
               onOpenFolder={handleCustomPathClick}
               onRefreshWorktrees={refreshWorktrees}
               onCreateWorktree={createWorktree}

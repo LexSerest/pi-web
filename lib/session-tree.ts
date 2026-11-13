@@ -86,6 +86,11 @@ export interface SessionTreeInput {
   /** Families revealed beyond the base limit by "show more", per projectKey or PINNED_MORE_KEY. */
   moreShown: Readonly<Record<string, number>>;
   pinnedCollapsed: boolean;
+  /**
+   * False for a regular user's fixed folder: the tree footer offers no
+   * "Open another project…". Defaults to true.
+   */
+  showOpenOtherProject?: boolean;
 }
 
 export interface SessionTreeModel {
@@ -543,8 +548,9 @@ export function buildSessionTree(input: SessionTreeInput): SessionTreeModel {
 
   // One spacer parts the groups from the footer, as one parts the pinned
   // section from them.
-  if (orderedProjects.length > 0) rows.push({ kind: "spacer", key: "footer-spacer" });
-  rows.push({ kind: "footer-open", key: "footer-open" });
+  const showOpenOtherProject = input.showOpenOtherProject !== false;
+  if (orderedProjects.length > 0 && (showOpenOtherProject || archivedCount > 0)) rows.push({ kind: "spacer", key: "footer-spacer" });
+  if (showOpenOtherProject) rows.push({ kind: "footer-open", key: "footer-open" });
   if (archivedCount > 0) rows.push({ kind: "footer-archived", key: "footer-archived", count: archivedCount });
 
   return { rows, projects: orderedProjects, archivedCount, unorderedKeysByBand, projectKeysToRecord };

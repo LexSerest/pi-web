@@ -13,6 +13,8 @@ interface Props {
   context: NewSessionContext;
   /** A phone: the menus open as bottom sheets. */
   mobile: boolean;
+  /** A regular user (no admin mode): with PI_WEB_FILES_DIR set, the folder is fixed and the picker is not switchable. */
+  restricted?: boolean;
   /** The control the move that mounted this bar came from: it takes focus once, if focus fell to the page. */
   initialFocus: NewSessionContextControl | null;
   onInitialFocusDone: () => void;
@@ -62,6 +64,7 @@ function loadHomeDir(): Promise<void> {
 export function NewSessionContextBar({
   context,
   mobile,
+  restricted = false,
   initialFocus,
   onInitialFocusDone,
   onPick,
@@ -74,6 +77,8 @@ export function NewSessionContextBar({
   const [homeDir, setHomeDir] = useState(() => homeDirFound);
   const [defaultFilesDir, setDefaultFilesDir] = useState<string | null>(() => defaultFilesDirFound);
   const pickerRef = useRef<ProjectWorktreePickerHandle>(null);
+  // The configured folder is fixed for a regular user; admin mode keeps every switch.
+  const locked = restricted && defaultFilesDir !== null;
   const initialFocusRef = useRef(initialFocus);
   const onInitialFocusDoneRef = useRef(onInitialFocusDone);
   onInitialFocusDoneRef.current = onInitialFocusDone;
@@ -111,9 +116,10 @@ export function NewSessionContextBar({
         mobile={mobile}
         label={t("workspace.newSessionContext")}
         homeDir={homeDir}
+        locked={locked}
         newWorktreeTitle={t("sidebar.newWorktreeForSession")}
         onPick={onPick}
-        onUseDefaultDirectory={defaultFilesDir ? undefined : onUseDefaultDirectory}
+        onUseDefaultDirectory={locked ? undefined : onUseDefaultDirectory}
         onOpenFolder={onOpenFolder}
         onRefreshWorktrees={onRefreshWorktrees}
         onCreateWorktree={onCreateWorktree}

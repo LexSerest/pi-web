@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useAdminMode } from "@/hooks/useAdminMode";
 import { SessionSidebar, type SelectSessionOptions, type SessionSidebarControl } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
 import { NewSessionContextBar, type NewSessionContextControl } from "./NewSessionContextBar";
@@ -79,7 +80,7 @@ import type { FileViewerState } from "@/lib/file-viewer-state";
 import { PRESET_READ_ONLY, type ToolEntry } from "@/lib/tool-presets";
 import { createSideChat, deleteSideChat } from "@/lib/side-chat-client";
 import { getAgentsBadge, getSessionFamily, isHiddenRelation, sideChatTitle } from "@/lib/session-family";
-import { getLastSettingsSection, settingsSectionRequiresProject, type SettingsSection } from "@/lib/settings-navigation";
+import { getLastSettingsSection, settingsSectionAvailable, settingsSectionRequiresProject, type SettingsSection } from "@/lib/settings-navigation";
 import { focusIfLost } from "@/lib/stacked-dialog";
 
 type SessionCopyField = "file" | "id" | "projectDir" | "gitBranch" | "gitWorktree";
@@ -111,6 +112,10 @@ export function AppShell() {
   // Restore fonts even when Settings and the chat composer have not been opened.
   useFontPreferences();
   const { locale, t: translate } = useI18n();
+  // A regular user's browser has no admin mode: the terminal, every settings
+  // section but General, and the project/folder pickers stay hidden. Setting
+  // or clearing the localStorage key applies on the next load.
+  const adminMode = useAdminMode();
   const isMobile = useIsMobile();
   const isNarrowMobile = useIsNarrowMobile();
   useViewportHeight();
@@ -477,10 +482,11 @@ export function AppShell() {
   }, [isMobile]);
 
   // The composer opens Settings too: a bare /mcp opens Settings › MCP (useAgentSession).
+  // A regular user has General alone, so a section they cannot see opens it.
   const openSettingsSection = useCallback((section: SettingsSection) => {
     setSettingsOpenAtHome(false);
-    setSettingsSection(section);
-  }, []);
+    setSettingsSection(settingsSectionAvailable(section, adminMode) ? section : "general");
+  }, [adminMode]);
 
   const handleSidebarToggle = useCallback(() => {
     if (isMobile) {
@@ -572,9 +578,12 @@ export function AppShell() {
   const fileWorkspaceGenerationRef = useRef(0);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
   const [terminalsRestored, setTerminalsRestored] = useState(false);
-  // PI_WEB_DISABLE_TERMINAL hides every terminal entry point. Start enabled so
-  // a failed check never removes a working feature; POST refuses anyway.
-  const [terminalEnabled, setTerminalEnabled] = useState(true);
+  // A regular user never gets the workspace terminal; an admin still loses it
+  // when the server's PI_WEB_DISABLE_TERMINAL is set. Start the server side
+  // enabled so a failed check never removes a working feature for an admin;
+  // POST refuses anyway.
+  const [operatorTerminalEnabled, setOperatorTerminalEnabled] = useState(true);
+  const terminalEnabled = adminMode && operatorTerminalEnabled;
   // Subagent tabs remain open within a project; side tabs follow their main session.
   const [agentTabs, setAgentTabs] = useState<{ sessionId: string; label: string; side?: boolean }[]>([]);
   const sideTabOwnerRef = useRef<string | null>(null);
@@ -612,9 +621,15 @@ export function AppShell() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!adminMode) {
+      // Saved tabs belong to a terminal this browser does not offer.
+      try { window.sessionStorage.removeItem(TERMINAL_TABS_KEY); } catch { /* storage is optional */ }
+      setTerminalsRestored(true);
+      return () => { cancelled = true; };
+    }
     const apply = (enabled: boolean) => {
       if (cancelled) return;
-      setTerminalEnabled(enabled);
+      setOperatorTerminalEnabled(enabled);
       if (!enabled) {
         // Saved tabs belong to a terminal the server will not create again.
         try { window.sessionStorage.removeItem(TERMINAL_TABS_KEY); } catch { /* storage is optional */ }
@@ -642,7 +657,14 @@ export function AppShell() {
       apply(true);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [adminMode]);
+
+  // Admin mode turned off in another tab: its terminals go with it.
+  useEffect(() => {
+    if (terminalEnabled || terminalTabs.length === 0) return;
+    setActiveFileTabId((current) => current && terminalTabs.some((tab) => tab.id === current) ? null : current);
+    setTerminalTabs([]);
+  }, [terminalEnabled, terminalTabs]);
 
   useEffect(() => {
     if (!terminalsRestored || !terminalEnabled) return;
@@ -1530,6 +1552,7 @@ export function AppShell() {
     <NewSessionContextBar
       context={contextForCwd(sidebarNewSessionContext, effectiveNewSessionCwd, newSessionMoveRef.current)}
       mobile={isMobile}
+      restricted={!adminMode}
       initialFocus={newSessionBarFocusRef.current}
       onInitialFocusDone={handleNewSessionBarFocusDone}
       onPick={handlePickNewSessionContext}
@@ -1649,6 +1672,7 @@ export function AppShell() {
         onOpenFile={handleOpenFile}
         onOpenTerminal={terminalEnabled ? handleOpenTerminal : undefined}
         terminalEnabled={terminalEnabled}
+        restricted={!adminMode}
         explorerRefreshKey={explorerRefreshKey}
         onExplorerRefresh={handleExplorerRefresh}
         onAtMention={handleAtMention}
@@ -1659,7 +1683,7 @@ export function AppShell() {
         onSessionsChange={handleSessionsChange}
       />
       <div style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
-        {([
+        {adminMode && ([
           ["models", translate("common.models")],
           ["skills", translate("common.skills")],
         ] as const).map(([section, label]) => {
@@ -3101,6 +3125,7 @@ export function AppShell() {
         sessionId={selectedSession?.id ?? null}
         initialSection={settingsSection}
         openAtHome={settingsOpenAtHome}
+        adminMode={adminMode}
         quoteSelectionEnabled={quoteSelectionEnabled}
         onQuoteSelectionChange={handleQuoteSelectionChange}
         onClose={() => {

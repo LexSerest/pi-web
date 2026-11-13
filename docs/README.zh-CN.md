@@ -63,11 +63,24 @@ pi-web update [--check] # 更新全局 npm 安装
 | `PI_WEB_APP_NAME` | PWA manifest 的 `name` 和 `short_name`；去除首尾空白，空值使用默认值 | `Pi Web` |
 | `PI_WEB_ALLOWED_HOSTS` | 额外允许的代理或自定义主机名，多个值用逗号分隔，必须精确匹配 | 未设置 |
 | `PI_WEB_PASSWORD` | 启用浏览器密码登录；API 客户端可使用用户名为 `pi` 的 Basic Auth | 不启用认证 |
-| `PI_WEB_DISABLE_TERMINAL` | 隐藏工作区终端：侧边栏不提供终端标签页，`POST /api/terminal` 会被拒绝 | 终端可用 |
-| `PI_WEB_FILES_DIR` | 未选择项目或会话时文件浏览器显示的目录，文件夹选择器也只能在其中浏览；目录必须存在，支持 `~` | 未设置 |
+| `PI_WEB_DISABLE_TERMINAL` | 对所有人隐藏工作区终端（包括 admin mode）：侧边栏不提供终端标签页，`POST /api/terminal` 会被拒绝 | 仅在 admin mode 中可用 |
+| `PI_WEB_FILES_DIR` | 普通浏览器固定使用的目录，也是新页面默认打开的项目；文件夹选择器只能在其中浏览。Admin mode 可以切换到任何目录。目录必须存在，支持 `~` | 未设置 |
 | `PI_WEB_HIDE_DOTFILES` | 在文件树、搜索、`@` 建议和更改列表中隐藏名称以点开头的文件和文件夹；直接路径仍可打开 | 未设置 |
 
 在启动服务前设置 `PI_WEB_APP_NAME`，例如 `PI_WEB_APP_NAME='工作 Pi' pi-web`。修改后重启服务即可提供新的 manifest，无需重新构建。已安装 PWA 的名称更新由浏览器管理，不保证立即生效；此设置不改变页面标题或图标。
+
+### Admin mode（浏览器）
+
+没有 admin mode 的浏览器是普通用户视图：工作区终端隐藏，设置中只显示“常规”（不含工具与 shell 部分），“模型”和“技能”快捷入口隐藏；设置 `PI_WEB_FILES_DIR` 时，会话列表、项目和 worktree 选择器以及文件夹选择器都固定在该目录。这只是界面便利，不是安全边界：服务器路由仍会响应任何调用者。
+
+要在此浏览器启用完整视图，请在 DevTools 控制台执行以下代码并刷新页面（删除该键即可恢复）：
+
+```js
+localStorage.setItem("pi-web:admin-mode", "1");
+// 短键同样有效：localStorage.setItem("admin-mode", "1")
+```
+
+除空值、`0` 或 `false` 外的任何值都会启用。
 
 例如：
 
